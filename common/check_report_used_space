@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+# Copyright European Organization for Nuclear Research (CERN) 2013
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Authors:
+# - Donata Mielaikaite, <donata.mielaikaite@cern.ch>, 2020
+# - Fernando Garzon, <oscar.fernando.garzon.miguez.ch> 2020
+
+'''
+Probe to check used space.
+'''
+
+import datetime
+import sys
+import traceback
+from rucio.core import monitor
+from rucio.core.rse import list_rses, get_rse_usage
+
+# Exit statuses
+OK, WARNING, CRITICAL, UNKNOWN = 0, 1, 2, 3
+
+if __name__ == "__main__":
+    try:
+        for rse in list_rses():
+            limits = get_rse_usage(rse['id'])
+            for usage in limits:
+                if usage['source'] == 'rucio':
+                    monitor.record_gauge(stat='judge.used_space_rucio.%s' % rse['rse'], value=usage['used'])
+                    print(rse['rse'], usage['source'], usage['used'] )
+                if usage['source'] == 'expired':
+                    print(rse['rse'], usage['source'], usage['used'] )
+                    monitor.record_gauge(stat='judge.used_space_expired.%s' % rse['rse'], value=usage['used'])
+                if usage['source'] == 'obsolete':
+                    print(rse['rse'], usage['source'], usage['used'] )
+                    monitor.record_gauge(stat='judge.used_space_obsolete.%s' % rse['rse'], value=usage['used'])
+    except:
+        print (traceback.format_exc())
+        sys.exit(UNKNOWN)
+    sys.exit(OK)

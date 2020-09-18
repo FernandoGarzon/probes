@@ -7,7 +7,7 @@
 #
 # Authors:
 # - Donata Mielaikaite, <donata.mielaikaite@cern.ch>, 2020
-# -Fernando Garzon, <oscar.fernando.garzon.miguez@cern.ch> 2020.
+# - Fernando Garzon, <oscar.fernando.garzon.miguez@cern.ch> 2020.
 
 """
 Probe to check the number of expected files per rse.
@@ -35,13 +35,13 @@ if __name__ == "__main__":
     status = OK
     session = get_session()
     try:
-        print('Number of expected files per RSE')
-        query = (session.query(models.ReplicationRule.rse_expression, func.sum(models.ReplicationRule.copies*models.DataIdentifier.length).label('sum_length')))
+        print('Number of expected files per RSE expression')
+        query = (session.query(models.ReplicationRule.rse_expression, func.sum(models.ReplicationRule.copies*models.DataIdentifier.length).label('sum_length'))
         .join(models.DataIdentifier, (models.ReplicationRule.name == models.DataIdentifier.name))
         .filter(models.ReplicationRule.state != RuleState.OK)
         .filter(models.DataIdentifier.length != models.ReplicationRule.locks_ok_cnt)
         .filter(models.DataIdentifier.length != None)
-        .filter(models.ReplicationRule.locks_ok_cnt != None).group_by(models.ReplicationRule.rse_expression)
+        .filter(models.ReplicationRule.locks_ok_cnt != None).group_by(models.ReplicationRule.rse_expression))
         results = query.all()
         for result in results:
             status = CRITICAL
