@@ -14,8 +14,7 @@
 # limitations under the License.
 #
 # Authors:
-# - Donata Mielaikaite, <donata.mielaikaite@cern.ch>, 2020
-# - Fernando Garzon, <oscar.fernando.garzon.miguez@cern.ch>, 2020
+# - Fernando Garzon, <oscar.fernando.garzon.miguez@cern.ch>, 2021
 
 '''
 Probe to check used space.
@@ -24,7 +23,7 @@ Probe to check used space.
 import sys
 import traceback
 from rucio.core import monitor
-from rucio.core.rse import list_rses, get_rse_usage, list_rse_attributes
+from rucio.core.rse import list_rses, get_rse_usage
 from rucio.db.sqla import models
 from rucio.db.sqla.session import get_session
 
@@ -36,27 +35,30 @@ if __name__ == '__main__':
         session = get_session()
         for rse in list_rses():
             sources = get_rse_usage(rse['id'], per_account=True)
-            #attributes = list_rse_attributes(rse['id'])
-            #country = attributes.get('country', 'UNKNOWN')
-            #rse_type = session.query(models.RSE.rse_type).filter(models.RSE.id == rse['id']).scalar()
-            #rse_type = str(rse_type).split(".", 1)[1]
+            rse_type = session.query(models.RSE.rse_type).filter(models.RSE.id == rse['id']).scalar()
+            rse_type = str(rse_type).split(".", 1)[1]
+            if rse_type == 'TAPE' or 'Test' in rse['rse'] or 'Temp' in rse['rse']:
+                continue
             for usage in sources:
                 if usage['source'] == 'rucio':
                     rucio = usage['used']
                     for dicti in usage['account_usages']:
                         account = dicti.get('account')
                         used = dicti.get('used')
-                        monitor.record_gauge(stat='judge.used_space_rucio_per_RSE_per_Account.%s.%s' % (rse['rse'], account), value=used)
+                        monitor.record_gauge(stat='judge.used_space_rucio_per_RSE_per_Account.%s.%s' %
+                                                  (rse['rse'], account), value=used)
                         print(rse['rse'], account, used)
                 if usage['source'] == 'expired':
                     expired = usage['used']
                 if usage['source'] == 'obsolete':
                     obsolete = usage['used']
-                locked = rucio - expired
-                dynamic = expired - obsolete
-                monitor.record_gauge(stat='judge.space_used_in.%s.%s.%s.%s' % (rse['rse'], country, rse_type, source),
-                                     value=usage['used'])
-                print(rse['rse'], country, rse_type, source, usage['used'])
+            locked = rucio - expired
+            dynamic = expired - obsolete
+                #monitor.record_gauge(stat='judge.space_used_in.%s.%s.%s.%s' % (rse['rse'], country, rse_type, source),
+                #                     value=usage['used'])
+            print(rse['rse'], 'LOCKED', locked)
+            print(rse['rse'], 'DYNAMIC', dynamic)
     except:
         print (traceback.format_exc())
         sys.exit(UNKNOWN)
+
