@@ -22,7 +22,9 @@ Probe to check used space.
 
 import sys
 import traceback
-from rucio.core import monitor
+
+from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+from rucio.common.config import config_get
 from rucio.core.rse import list_rses, get_rse_usage
 from rucio.db.sqla import models
 from rucio.db.sqla.session import get_session
@@ -30,23 +32,25 @@ from rucio.db.sqla.session import get_session
 # Exit statuses
 OK, WARNING, CRITICAL, UNKNOWN = 0, 1, 2, 3
 
+PROM_SERVERS = config_get('monitor', 'prometheus_servers', raise_exception=False, default='')
+if PROM_SERVERS != '':
+    PROM_SERVERS = PROM_SERVERS.split(',')
+
 if __name__ == '__main__':
     try:
+        registry = CollectorRegistry()
         session = get_session()
         for rse in list_rses():
             sources = get_rse_usage(rse['id'], per_account=True)
-            rse_type = session.query(models.RSE.rse_type).filter(models.RSE.id == rse['id']).scalar()
-            rse_type = str(rse_type).split(".", 1)[1]
-            if rse_type == 'TAPE' or 'Test' in rse['rse'] or 'Temp' in rse['rse']:
-                continue
             for usage in sources:
                 if usage['source'] == 'rucio':
                     rucio = usage['used']
                     for dicti in usage['account_usages']:
                         account = dicti.get('account')
                         used = dicti.get('used')
-                        monitor.record_gauge(stat='judge.used_space_rucio_per_RSE_per_Account.%s.%s' %
-                                                  (rse['rse'], account), value=used)
+                        Gauge('judge_used_space_rucio_per_RSE_per_Account_%s_%s'
+                              % (rse['rse'], account)
+                              , '', registry=registry).set(used)
                         print(rse['rse'], account, used)
                 if usage['source'] == 'expired':
                     expired = usage['used']
@@ -54,13 +58,21 @@ if __name__ == '__main__':
                     obsolete = usage['used']
             locked = rucio - expired
             dynamic = expired - obsolete
-            monitor.record_gauge(stat='judge.Dynamic_space_at.%s' % rse['rse'],
-                                 value=dynamic)
-            monitor.record_gauge(stat='judge.Locked_space_at.%s' % rse['rse'],
-                                 value=locked)
-            print(rse['rse'], 'LOCKED', locked)
-            print(rse['rse'], 'DYNAMIC', dynamic)
+            Gauge('judge_Dynamic_space_at_%s'
+                  % rse['rse']
+                  , '', registry=registry).set(dynamic)
+            Gauge('judge_Locked_space_at_%s'
+                  % rse['rse']
+                  , '', registry=registry).set(locked)
+        print(rse['rse'], 'LOCKED', locked)
+        print(rse['rse'], 'DYNAMIC', dynamic)
+        if len(PROM_SERVERS):
+            for server in PROM_SERVERS:
+                try:
+                    push_to_gateway(server.strip(), job='check_updated_dids', registry=registry)
+                except:
+                    continue
     except:
-        print (traceback.format_exc())
+        print(traceback.format_exc())
         sys.exit(UNKNOWN)
-
+    sys.exit(OK)
