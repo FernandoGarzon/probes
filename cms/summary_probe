@@ -48,9 +48,9 @@ if __name__ == '__main__':
                     for dicti in usage['account_usages']:
                         account = dicti.get('account')
                         used = dicti.get('used')
-                        g1 = Gauge('judge_used_space_rucio_per_RSE_per_Account_%s_%s'
-                              % (rse['rse'], account)
-                              , '', registry=registry).set(used)
+                        g1 = Gauge('judge_used_space_rucio_per_RSE_per_Account'
+                              , '', labelnames=('rse', 'account'), registry=registry)
+                        g1.labels(**{'rse': rse['rse'], 'account': account}).set(used)
                         print(rse['rse'], account, used)
                 if usage['source'] == 'expired':
                     expired = usage['used']
@@ -58,18 +58,18 @@ if __name__ == '__main__':
                     obsolete = usage['used']
             locked = rucio - expired
             dynamic = expired - obsolete
-            g2 = Gauge('judge_Dynamic_space_at_%s'
-                  % rse['rse']
-                  , '', registry=registry).set(dynamic)
-            g3 = Gauge('judge_Locked_space_at_%s'
-                  % rse['rse']
-                  , '', registry=registry).set(locked)
+            g2 = Gauge('judge_Dynamic_space_at'
+                  , '', labelnames='rse', registry=registry)
+            g2.labels(**{'rse': rse['rse']}).set(dynamic)
+            g3 = Gauge('judge_Locked_space_at'
+                  , '', labelnames='rse', registry=registry)
+            g3.labels(**{'rse': rse['rse']}).set(locked)
         print(rse['rse'], 'LOCKED', locked)
         print(rse['rse'], 'DYNAMIC', dynamic)
         if len(PROM_SERVERS):
             for server in PROM_SERVERS:
                 try:
-                    push_to_gateway(server.strip(), job='check_updated_dids', registry=registry)
+                    push_to_gateway(server.strip(), job='check_usage_space', registry=registry)
                 except:
                     continue
     except:
